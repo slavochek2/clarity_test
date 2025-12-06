@@ -114,35 +114,160 @@ export default function TrainingSessionPage() {
   }, [transcript]);
 
   // Submit rating
-  const handleRatingSubmit = useCallback(() => {
-    const tips = getMockTips(currentRound);
-    const score = getMockScore(currentRound);
-
-    setCurrentTips(tips);
-    setActualScore(score);
-
-    // Save round result
+  const handleRatingSubmit = useCallback(async () => {
+    console.log('[Training Session] Submitting rating', { currentRound, userEstimate });
+    
     const lastUserMessage = messages.filter((m) => m.sender === 'user').pop();
-    setRoundResults((prev) => [
-      ...prev,
-      {
-        userMessage: lastUserMessage?.text || '',
-        userEstimate,
-        actualScore: score,
-        tips,
-      },
-    ]);
+    const lastAiMessage = messages.filter((m) => m.sender === 'ai').pop();
+    
+    if (!lastUserMessage || !lastAiMessage) {
+      console.warn('[Training Session] Missing messages, using mock data');
+      const tips = getMockTips(currentRound);
+      const score = getMockScore(currentRound);
+      setCurrentTips(tips);
+      setActualScore(score);
+      setRoundResults((prev) => [
+        ...prev,
+        {
+          userMessage: lastUserMessage?.text || '',
+          userEstimate,
+          actualScore: score,
+          tips,
+        },
+      ]);
+      setPhase('feedback');
+      return;
+    }
 
-    setPhase('feedback');
+    try {
+      console.log('[Training Session] Calling AI evaluation API', {
+        agentMessage: lastAiMessage.text.substring(0, 50) + '...',
+        userResponse: lastUserMessage.text.substring(0, 50) + '...',
+      });
+
+      const response = await fetch('/api/ai/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentMessage: lastAiMessage.text,
+          userResponse: lastUserMessage.text,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[Training Session] AI evaluation received', {
+        score: data.score,
+        tipsCount: data.tips?.length || 0,
+        metrics: data.metrics,
+      });
+
+      setCurrentTips(data.tips || []);
+      setActualScore(data.score || 0);
+
+      setRoundResults((prev) => [
+        ...prev,
+        {
+          userMessage: lastUserMessage.text,
+          userEstimate,
+          actualScore: data.score || 0,
+          tips: data.tips || [],
+        },
+      ]);
+
+      setPhase('feedback');
+    } catch (error) {
+      console.error('[Training Session] Error evaluating with AI, using mock data', error);
+      // Fallback to mock data
+      const tips = getMockTips(currentRound);
+      const score = getMockScore(currentRound);
+      setCurrentTips(tips);
+      setActualScore(score);
+      setRoundResults((prev) => [
+        ...prev,
+        {
+          userMessage: lastUserMessage.text,
+          userEstimate,
+          actualScore: score,
+          tips,
+        },
+      ]);
+      setPhase('feedback');
+    }
   }, [currentRound, messages, userEstimate]);
 
   // Continue after feedback
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
+    console.log('[Training Session] Continuing to next round', { currentRound });
     setPhase('ai-responding');
 
-    // Simulate AI thinking/responding
-    setTimeout(() => {
-      const aiResponse = getMockResponse(currentRound);
+    try {
+      // Build dialogue history
+      const dialogueHistory = messages
+        .filter((m) => m.sender === 'ai' || m.sender === 'user')
+        .map((m) => ({
+          agent: m.sender === 'ai' ? character.name : 'User',
+          user: m.text,
+        }));
+
+      // Calculate average score from round results
+      const avgScore = roundResults.length > 0
+        ? roundResults.reduce((sum, r) => sum + r.actualScore, 0) / roundResults.length
+        : 0;
+
+      console.log('[Training Session] Generating next question', {
+        dialogueHistoryLength: dialogueHistory.length,
+        avgScore,
+      });
+
+      const response = await fetch('/api/ai/generate-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          persona: {
+            id: character.id,
+            name: character.name,
+            topics: ['Эмпатия', 'Поддержка'],
+            starter_prompt: initialMessage,
+          },
+          dialogueHistory,
+          score: avgScore,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[Training Session] Next question generated', {
+        questionLength: data.question?.length || 0,
+      });
+
+      // Extract the actual question from the prompt (simplified)
+      // If the question is too long, it's probably the full prompt, so extract just the question part
+      let aiResponse = data.question || getMockResponse(currentRound);
+      
+      // If response is very long, try to extract just the question part
+      if (aiResponse.length > 500) {
+        // Try to find the last question mark or extract last sentence
+        const lastQuestion = aiResponse.match(/[^.!?]*\?[^.!?]*$/);
+        if (lastQuestion) {
+          aiResponse = lastQuestion[0].trim();
+        } else {
+          // Fallback: take last 200 characters
+          aiResponse = aiResponse.slice(-200).trim();
+        }
+      }
+      
+      // If still no good response, use mock
+      if (!aiResponse || aiResponse.length < 10) {
+        aiResponse = getMockResponse(currentRound);
+      }
+
       const aiMessage: Message = {
         id: Date.now().toString(),
         sender: 'ai',
@@ -152,8 +277,23 @@ export default function TrainingSessionPage() {
       setCurrentRound((prev) => prev + 1);
       setUserEstimate(5);
       setPhase('listening');
-    }, 1500);
-  }, [currentRound]);
+    } catch (error) {
+      console.error('[Training Session] Error generating question, using mock data', error);
+      // Fallback to mock data
+      setTimeout(() => {
+        const aiResponse = getMockResponse(currentRound);
+        const aiMessage: Message = {
+          id: Date.now().toString(),
+          sender: 'ai',
+          text: aiResponse,
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+        setCurrentRound((prev) => prev + 1);
+        setUserEstimate(5);
+        setPhase('listening');
+      }, 1500);
+    }
+  }, [currentRound, messages, roundResults, character, initialMessage]);
 
   // Get timer color based on time left
   const getTimerColor = () => {
@@ -255,8 +395,12 @@ export default function TrainingSessionPage() {
             {/* Controls */}
             <div className="flex items-center justify-between">
               <button
-                onClick={toggleRecording}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggleRecording();
+                }}
+                type="button"
+                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                   isRecording
                     ? 'bg-red-500 hover:bg-red-600 text-white'
                     : 'bg-indigo-600 hover:bg-indigo-500 text-white'
@@ -275,11 +419,15 @@ export default function TrainingSessionPage() {
               </button>
 
               <button
-                onClick={handleSubmit}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSubmit();
+                }}
+                type="button"
                 disabled={!transcript.trim()}
                 className={`px-6 py-3 rounded-lg font-medium transition-all ${
                   transcript.trim()
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-500 cursor-pointer'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                 }`}
               >
@@ -292,8 +440,19 @@ export default function TrainingSessionPage() {
 
       {/* Rating overlay */}
       {phase === 'rating' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-20">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-20"
+          onClick={(e) => {
+            // Prevent closing on overlay click, only allow button clicks
+            if (e.target === e.currentTarget) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <div 
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="text-xl font-bold text-gray-900 dark:text-white text-center mb-2">
               How understood does {character.name} feel?
             </h2>
@@ -322,8 +481,13 @@ export default function TrainingSessionPage() {
             </div>
 
             <button
-              onClick={handleRatingSubmit}
-              className="w-full py-3 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-all"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRatingSubmit();
+              }}
+              type="button"
+              className="w-full py-3 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-all cursor-pointer"
             >
               See Result
             </button>
@@ -333,8 +497,19 @@ export default function TrainingSessionPage() {
 
       {/* Feedback overlay */}
       {phase === 'feedback' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-20">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl max-h-[80vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-20"
+          onClick={(e) => {
+            // Prevent closing on overlay click
+            if (e.target === e.currentTarget) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <div 
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Score comparison */}
             <div className="text-center mb-6">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
@@ -381,8 +556,13 @@ export default function TrainingSessionPage() {
             </div>
 
             <button
-              onClick={handleContinue}
-              className="w-full mt-6 py-3 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-all"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleContinue();
+              }}
+              type="button"
+              className="w-full mt-6 py-3 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-all cursor-pointer"
             >
               Continue
             </button>

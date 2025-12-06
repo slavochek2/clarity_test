@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  MOCK_SESSION,
   getMockResponse,
   getMockTips,
   getMockScore,
   FeedbackTip,
 } from '@/lib/mockData';
+import { getProfile } from '@/lib/storage';
+import type { Persona as AIPersona } from '@/lib/ai/evaluationPipeline';
 
 interface Message {
   id: string;
@@ -29,14 +30,71 @@ const SESSION_DURATION = 180; // 3 minutes in seconds
 
 export default function TrainingSessionPage() {
   const router = useRouter();
-  const { character, situation, initialMessage } = MOCK_SESSION;
+  const [aiPersona, setAiPersona] = useState<AIPersona | null>(null);
+  const [character, setCharacter] = useState({
+    id: 'default',
+    name: 'Loading...',
+    avatar: '/avatars/default.png',
+    description: '',
+  });
+  const [situation, setSituation] = useState({
+    role: 'You are practicing active listening',
+    location: 'Training session',
+    context: '',
+  });
+  const [initialMessage, setInitialMessage] = useState('Loading...');
+
+  // Load AI persona data
+  useEffect(() => {
+    const profile = getProfile();
+    const aiPersonaJson = sessionStorage.getItem('selected_ai_persona');
+    
+    if (aiPersonaJson) {
+      try {
+        const persona = JSON.parse(aiPersonaJson) as AIPersona;
+        setAiPersona(persona);
+        setCharacter({
+          id: persona.id,
+          name: persona.name,
+          avatar: '/avatars/default.png',
+          description: persona.short_description,
+        });
+        setSituation({
+          role: 'You are practicing active listening',
+          location: 'Training session',
+          context: persona.starter_prompt || 'Start a conversation to practice your listening skills.',
+        });
+        setInitialMessage(persona.starter_prompt || 'Hello, let\'s begin our conversation.');
+      } catch (e) {
+        console.error('Error loading AI persona:', e);
+        // Fallback
+        setInitialMessage('Hello, let\'s begin our conversation.');
+      }
+    } else if (profile?.persona) {
+      // Fallback to profile persona
+      setCharacter({
+        id: profile.persona.id,
+        name: profile.persona.name,
+        avatar: '/avatars/default.png',
+        description: profile.persona.description,
+      });
+      setInitialMessage('Hello, let\'s begin our conversation.');
+    } else {
+      setInitialMessage('Hello, let\'s begin our conversation.');
+    }
+  }, []);
 
   // Session state
   const [timeLeft, setTimeLeft] = useState(SESSION_DURATION);
   const [phase, setPhase] = useState<SessionPhase>('listening');
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', sender: 'ai', text: initialMessage },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  // Initialize messages when initialMessage is loaded
+  useEffect(() => {
+    if (initialMessage && initialMessage !== 'Loading...' && messages.length === 0) {
+      setMessages([{ id: '1', sender: 'ai', text: initialMessage }]);
+    }
+  }, [initialMessage]);
   const [currentRound, setCurrentRound] = useState(0);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
 
@@ -223,16 +281,21 @@ export default function TrainingSessionPage() {
         avgScore,
       });
 
+      // Use AI persona if available, otherwise construct from character
+      const personaForAPI = aiPersona || {
+        id: character.id,
+        name: character.name,
+        topics: ['Empathy', 'Support'],
+        starter_prompt: initialMessage,
+        short_description: character.description,
+        why_helpful_to_user: '',
+      };
+
       const response = await fetch('/api/ai/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          persona: {
-            id: character.id,
-            name: character.name,
-            topics: ['Эмпатия', 'Поддержка'],
-            starter_prompt: initialMessage,
-          },
+          persona: personaForAPI,
           dialogueHistory,
           score: avgScore,
         }),
@@ -245,18 +308,30 @@ export default function TrainingSessionPage() {
       const data = await response.json();
       console.log('[Training Session] Next question generated', {
         questionLength: data.question?.length || 0,
+        question: data.question,
       });
 
-      // Extract the actual question from the prompt (simplified)
-      // If the question is too long, it's probably the full prompt, so extract just the question part
+      // Use the generated question directly (it should be just the question, not the full prompt)
       let aiResponse = data.question || getMockResponse(currentRound);
       
-      // If response is very long, try to extract just the question part
-      if (aiResponse.length > 500) {
-        // Try to find the last question mark or extract last sentence
-        const lastQuestion = aiResponse.match(/[^.!?]*\?[^.!?]*$/);
-        if (lastQuestion) {
-          aiResponse = lastQuestion[0].trim();
+      // Clean up the response if it contains unwanted parts
+      // Remove any prompt instructions or dialogue history markers
+      aiResponse = aiResponse
+        .replace(/— Dialogue history —/g, '')
+        .replace(/Score: \d+/g, '')
+        .replace(/Your next question:/g, '')
+        .replace(/You are speaking as[\s\S]*?Start from this message:/g, '')
+        .trim();
+      
+      // If response is very long, it might still contain the full prompt
+      if (aiResponse.length > 300) {
+        // Try to extract just the last sentence or question
+        const sentences = aiResponse.split(/[.!?]+/).filter((s: string) => s.trim().length > 0);
+        if (sentences.length > 0) {
+          aiResponse = sentences[sentences.length - 1].trim();
+          if (!aiResponse.endsWith('.') && !aiResponse.endsWith('?') && !aiResponse.endsWith('!')) {
+            aiResponse += '.';
+          }
         } else {
           // Fallback: take last 200 characters
           aiResponse = aiResponse.slice(-200).trim();
@@ -293,7 +368,15 @@ export default function TrainingSessionPage() {
         setPhase('listening');
       }, 1500);
     }
-  }, [currentRound, messages, roundResults, character, initialMessage]);
+  }, [currentRound, messages, roundResults, character, initialMessage, aiPersona]);
+
+  // Handle finish button
+  const handleFinish = useCallback(() => {
+    console.log('[Training Session] Finishing session', { roundResults });
+    // Save results to sessionStorage
+    sessionStorage.setItem('training_results', JSON.stringify(roundResults));
+    router.push('/training/results');
+  }, [roundResults, router]);
 
   // Get timer color based on time left
   const getTimerColor = () => {
@@ -318,9 +401,21 @@ export default function TrainingSessionPage() {
             </div>
           </div>
 
-          {/* Timer */}
-          <div className={`text-2xl font-mono font-bold ${getTimerColor()}`}>
-            {formatTime(timeLeft)}
+          {/* Timer and Finish button */}
+          <div className="flex items-center gap-4">
+            <div className={`text-2xl font-mono font-bold ${getTimerColor()}`}>
+              {formatTime(timeLeft)}
+            </div>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                handleFinish();
+              }}
+              type="button"
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all"
+            >
+              Finish
+            </button>
           </div>
         </div>
       </header>
@@ -379,10 +474,16 @@ export default function TrainingSessionPage() {
               <textarea
                 value={transcript}
                 onChange={handleTranscriptChange}
-                placeholder={isRecording ? 'Speak now... (or type for demo)' : 'Press the mic button to speak...'}
+                placeholder="Type your response here..."
                 className="w-full p-3 pr-12 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 rows={3}
-                disabled={!isRecording && transcript === ''}
+                onKeyDown={(e) => {
+                  // Allow Enter+Shift for new line, Enter alone to submit
+                  if (e.key === 'Enter' && !e.shiftKey && transcript.trim()) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
               />
               {isRecording && (
                 <div className="absolute top-3 right-3 flex items-center gap-2">
@@ -403,8 +504,9 @@ export default function TrainingSessionPage() {
                 className={`w-14 h-14 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                   isRecording
                     ? 'bg-red-500 hover:bg-red-600 text-white'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
                 }`}
+                title={isRecording ? 'Stop recording' : 'Start recording (optional)'}
               >
                 {isRecording ? (
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">

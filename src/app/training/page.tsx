@@ -1,14 +1,54 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MOCK_SESSION } from '@/lib/mockData';
+import { getProfile } from '@/lib/storage';
+import type { Persona as AIPersona } from '@/lib/ai/evaluationPipeline';
 
 export default function TrainingIntroPage() {
   const router = useRouter();
   const [isStarting, setIsStarting] = useState(false);
+  const [aiPersona, setAiPersona] = useState<AIPersona | null>(null);
+  const [profile, setProfile] = useState<any>(null);
 
-  const { character, situation } = MOCK_SESSION;
+  useEffect(() => {
+    const savedProfile = getProfile();
+    setProfile(savedProfile);
+
+    // Get full AI persona data
+    const aiPersonaJson = sessionStorage.getItem('selected_ai_persona');
+    if (aiPersonaJson) {
+      try {
+        setAiPersona(JSON.parse(aiPersonaJson));
+      } catch (e) {
+        console.error('Error parsing AI persona:', e);
+      }
+    }
+  }, []);
+
+  // Use AI persona if available, otherwise fallback to profile
+  const character = aiPersona ? {
+    id: aiPersona.id,
+    name: aiPersona.name,
+    description: aiPersona.short_description,
+    avatar: '/avatars/default.png',
+  } : profile?.persona ? {
+    id: profile.persona.id,
+    name: profile.persona.name,
+    description: profile.persona.description,
+    avatar: '/avatars/default.png',
+  } : {
+    id: 'default',
+    name: 'Unknown',
+    description: 'No character selected',
+    avatar: '/avatars/default.png',
+  };
+
+  const situation = {
+    role: 'You are practicing active listening',
+    location: 'Training session',
+    context: aiPersona?.starter_prompt || 'Start a conversation to practice your listening skills.',
+  };
 
   const handleStart = () => {
     setIsStarting(true);

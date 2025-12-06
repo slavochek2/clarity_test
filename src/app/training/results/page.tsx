@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MOCK_SESSION, FeedbackTip } from '@/lib/mockData';
+import { FeedbackTip } from '@/lib/mockData';
+import { getProfile } from '@/lib/storage';
+import type { Persona as AIPersona } from '@/lib/ai/evaluationPipeline';
 
 interface RoundResult {
   userMessage: string;
@@ -15,10 +17,29 @@ export default function TrainingResultsPage() {
   const router = useRouter();
   const [results, setResults] = useState<RoundResult[]>([]);
   const [overallScore, setOverallScore] = useState(0);
-
-  const { character } = MOCK_SESSION;
+  const [characterName, setCharacterName] = useState('your practice partner');
+  const [aiPersona, setAiPersona] = useState<AIPersona | null>(null);
 
   useEffect(() => {
+    // Load character name from profile or sessionStorage
+    const profile = getProfile();
+    if (profile?.persona) {
+      setCharacterName(profile.persona.name);
+    }
+
+    // Load full AI persona data if available
+    const aiPersonaJson = sessionStorage.getItem('selected_ai_persona');
+    if (aiPersonaJson) {
+      try {
+        const persona = JSON.parse(aiPersonaJson) as AIPersona;
+        setAiPersona(persona);
+        setCharacterName(persona.name);
+      } catch (e) {
+        console.error('Error parsing AI persona:', e);
+      }
+    }
+
+    // Load training results
     const stored = sessionStorage.getItem('training_results');
     if (stored) {
       const parsed: RoundResult[] = JSON.parse(stored);
@@ -69,8 +90,13 @@ export default function TrainingResultsPage() {
             Training Complete
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Here&apos;s how you did with {character.name}
+            Here&apos;s how you did with {characterName}
           </p>
+          {aiPersona && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto">
+              {aiPersona.short_description}
+            </p>
+          )}
         </div>
 
         {/* Overall score card */}

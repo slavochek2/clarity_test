@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProfile, UserProfile } from '@/lib/storage';
+import type { Persona as AIPersona } from '@/lib/ai/evaluationPipeline';
 
 const LEVEL_LABELS: Record<UserProfile['skillLevel'], string> = {
   beginner: 'Beginner',
@@ -22,9 +23,21 @@ const GOAL_LABELS: Record<string, string> = {
 export default function CompletePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [aiPersona, setAiPersona] = useState<AIPersona | null>(null);
 
   useEffect(() => {
-    setProfile(getProfile());
+    const savedProfile = getProfile();
+    setProfile(savedProfile);
+
+    // Get full AI persona data
+    const aiPersonaJson = sessionStorage.getItem('selected_ai_persona');
+    if (aiPersonaJson) {
+      try {
+        setAiPersona(JSON.parse(aiPersonaJson));
+      } catch (e) {
+        console.error('Error parsing AI persona:', e);
+      }
+    }
   }, []);
 
   if (!profile) {
@@ -70,9 +83,43 @@ export default function CompletePage() {
             <p className="text-lg font-medium text-gray-900 dark:text-white">
               {profile.persona.name}
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {profile.persona.description}
-            </p>
+            {aiPersona && (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  {aiPersona.short_description}
+                </p>
+                {aiPersona.topics && aiPersona.topics.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Topics:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {aiPersona.topics.map((topic, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 text-xs rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                        >
+                          {topic}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {aiPersona.why_helpful_to_user && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                      Why this helps you:
+                    </p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {aiPersona.why_helpful_to_user}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+            {!aiPersona && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {profile.persona.description}
+              </p>
+            )}
           </div>
 
           <div>

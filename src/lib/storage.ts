@@ -35,3 +35,10 @@ export function updateProfile(updates: Partial<UserProfile>): void {
     saveProfile({ ...current, ...updates });
   }
 }
+
+export function clearProfile(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.clear();
+  }
+}

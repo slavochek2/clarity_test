@@ -9,6 +9,7 @@ interface UseScribeReturn {
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   clearTranscript: () => void;
+  setTranscript: (value: string) => void;
 }
 
 export function useScribe(): UseScribeReturn {
@@ -136,5 +137,6 @@ export function useScribe(): UseScribeReturn {
     startRecording,
     stopRecording,
     clearTranscript,
+    setTranscript,
   };
 }

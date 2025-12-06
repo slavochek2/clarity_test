@@ -49,7 +49,13 @@ export default function TrainingSessionPage() {
     startRecording,
     stopRecording,
     clearTranscript,
+    setTranscript,
   } = useScribe();
+
+  // Handle manual text input
+  const handleTranscriptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setTranscript(e.target.value);
+  }, [setTranscript]);
 
   // Rating state
   const [userEstimate, setUserEstimate] = useState(5);
@@ -241,10 +247,9 @@ export default function TrainingSessionPage() {
               <textarea
                 value={transcript}
                 onChange={handleTranscriptChange}
-                placeholder={isRecording ? 'Speak now... (or type for demo)' : 'Press the mic button to speak...'}
+                placeholder={isRecording ? 'Speak now... (or type here)' : 'Press the mic button or type your response...'}
                 className="w-full p-3 pr-12 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 rows={3}
-                disabled={!isRecording && transcript === ''}
               />
               {isRecording && (
                 <div className="absolute top-3 right-3 flex items-center gap-2">

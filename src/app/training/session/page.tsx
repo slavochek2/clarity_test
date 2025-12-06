@@ -55,19 +55,20 @@ export default function TrainingSessionPage() {
 
   // Timer countdown
   useEffect(() => {
-    if (timeLeft <= 0) {
-      // Session ended
-      sessionStorage.setItem('training_results', JSON.stringify(roundResults));
-      router.push('/training/results');
-      return;
-    }
-
     const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prevTimeLeft) => {
+        if (prevTimeLeft <= 1) {
+          clearInterval(timer);
+          sessionStorage.setItem('training_results', JSON.stringify(roundResults));
+          router.push('/training/results');
+          return 0;
+        }
+        return prevTimeLeft - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, roundResults, router]);
+  }, [roundResults, router]);
 
   // Auto-scroll to latest message
   useEffect(() => {

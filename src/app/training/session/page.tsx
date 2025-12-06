@@ -9,6 +9,7 @@ import {
   getMockScore,
   FeedbackTip,
 } from '@/lib/mockData';
+import { useScribe } from '@/hooks/useScribe';
 
 interface Message {
   id: string;
@@ -40,9 +41,15 @@ export default function TrainingSessionPage() {
   const [currentRound, setCurrentRound] = useState(0);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
 
-  // Speaking/transcription state
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  // Speaking/transcription state (using ElevenLabs Scribe)
+  const {
+    isRecording,
+    transcript,
+    error: scribeError,
+    startRecording,
+    stopRecording,
+    clearTranscript,
+  } = useScribe();
 
   // Rating state
   const [userEstimate, setUserEstimate] = useState(5);
@@ -82,20 +89,15 @@ export default function TrainingSessionPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Simulate voice recording (in real app, would use Web Speech API)
+  // Toggle voice recording with ElevenLabs Scribe
   const toggleRecording = useCallback(() => {
     if (isRecording) {
-      setIsRecording(false);
+      stopRecording();
     } else {
-      setIsRecording(true);
+      startRecording();
       setPhase('speaking');
     }
-  }, [isRecording]);
-
-  // Handle transcript input (mock - in real app would come from speech recognition)
-  const handleTranscriptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTranscript(e.target.value);
-  };
+  }, [isRecording, startRecording, stopRecording]);
 
   // Submit user response
   const handleSubmit = useCallback(() => {
@@ -108,10 +110,10 @@ export default function TrainingSessionPage() {
       text: transcript,
     };
     setMessages((prev) => [...prev, userMessage]);
-    setTranscript('');
-    setIsRecording(false);
+    clearTranscript();
+    stopRecording();
     setPhase('rating');
-  }, [transcript]);
+  }, [transcript, clearTranscript, stopRecording]);
 
   // Submit rating
   const handleRatingSubmit = useCallback(() => {

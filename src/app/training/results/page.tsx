@@ -172,10 +172,10 @@ export default function TrainingResultsPage() {
         {/* Action buttons */}
         <div className="flex gap-4">
           <button
-            onClick={() => router.push('/training')}
+            onClick={() => router.push('/training/session')}
             className="flex-1 py-3 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-all"
           >
-            Try Again
+            Practice Again
           </button>
           <button
             onClick={() => router.push('/')}

@@ -6,6 +6,7 @@ interface SelectCardProps {
   selected: boolean;
   onClick: () => void;
   disabled?: boolean;
+  description?: string;
 }
 
 export default function SelectCard({
@@ -14,6 +15,7 @@ export default function SelectCard({
   selected,
   onClick,
   disabled = false,
+  description,
 }: SelectCardProps) {
   return (
     <button
@@ -36,15 +38,28 @@ export default function SelectCard({
       >
         {shortcut}
       </span>
-      <span
-        className={`text-base ${
-          selected
-            ? 'text-indigo-900 dark:text-indigo-100 font-medium'
-            : 'text-gray-700 dark:text-gray-300'
-        }`}
-      >
-        {label}
-      </span>
+      <div className="flex-1 min-w-0">
+        <span
+          className={`text-base block ${
+            selected
+              ? 'text-indigo-900 dark:text-indigo-100 font-medium'
+              : 'text-gray-700 dark:text-gray-300'
+          }`}
+        >
+          {label}
+        </span>
+        {description && (
+          <span
+            className={`text-sm block mt-0.5 ${
+              selected
+                ? 'text-indigo-700 dark:text-indigo-300'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {description}
+          </span>
+        )}
+      </div>
       {selected && (
         <svg
           className="w-5 h-5 text-indigo-600 ml-auto shrink-0"

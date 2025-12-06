@@ -51,7 +51,7 @@ export default function GoalsPage() {
   };
 
   return (
-    <OnboardingLayout currentStep={1}>
+    <OnboardingLayout currentStep={1} totalSteps={3}>
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
           What do you hope to achieve?

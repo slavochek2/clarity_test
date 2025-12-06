@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import OnboardingLayout from '@/components/OnboardingLayout';
 import SelectCard from '@/components/SelectCard';
-import { saveProfile, UserProfile } from '@/lib/storage';
+import { UserProfile } from '@/lib/storage';
 
 type SkillLevel = UserProfile['skillLevel'];
 
@@ -38,25 +38,14 @@ export default function AssessPage() {
   const handleContinue = () => {
     if (!selectedLevel) return;
 
-    // Retrieve goals from previous step
-    const goalsJson = sessionStorage.getItem('onboarding_goals');
-    const goals = goalsJson ? JSON.parse(goalsJson) : [];
+    // Store skill level for next step
+    sessionStorage.setItem('onboarding_skillLevel', selectedLevel);
 
-    // Save complete profile
-    saveProfile({
-      goals,
-      skillLevel: selectedLevel,
-      createdAt: new Date().toISOString(),
-    });
-
-    // Clean up session storage
-    sessionStorage.removeItem('onboarding_goals');
-
-    router.push('/onboarding/complete');
+    router.push('/onboarding/persona');
   };
 
   return (
-    <OnboardingLayout currentStep={2}>
+    <OnboardingLayout currentStep={2} totalSteps={3}>
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
           How often do you paraphrase back what others say?

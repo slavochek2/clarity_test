@@ -2,14 +2,14 @@
 
 interface OnboardingLayoutProps {
   children: React.ReactNode;
-  currentStep: 1 | 2;
+  currentStep: number;
   totalSteps?: number;
 }
 
 export default function OnboardingLayout({
   children,
   currentStep,
-  totalSteps = 2,
+  totalSteps = 3,
 }: OnboardingLayoutProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900">

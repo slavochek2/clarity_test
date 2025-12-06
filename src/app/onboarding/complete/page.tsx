@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getProfile, UserProfile } from '@/lib/storage';
 
 const LEVEL_LABELS: Record<UserProfile['skillLevel'], string> = {
@@ -19,6 +20,7 @@ const GOAL_LABELS: Record<string, string> = {
 };
 
 export default function CompletePage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -60,8 +62,20 @@ export default function CompletePage() {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 text-left">
-          <div className="mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 text-left space-y-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+              Practice Partner
+            </p>
+            <p className="text-lg font-medium text-gray-900 dark:text-white">
+              {profile.persona.name}
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {profile.persona.description}
+            </p>
+          </div>
+
+          <div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
               Your Level
             </p>
@@ -98,9 +112,12 @@ export default function CompletePage() {
           </div>
         </div>
 
-        <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
-          Dashboard and exercises coming soon...
-        </p>
+        <button
+          onClick={() => router.push('/training')}
+          className="mt-6 w-full py-3 px-4 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-all"
+        >
+          Start Training Session
+        </button>
       </div>
     </main>
   );

@@ -1,6 +1,13 @@
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface UserProfile {
   goals: string[];
   skillLevel: 'beginner' | 'developing' | 'intermediate' | 'advanced';
+  persona: Persona;
   createdAt: string;
 }
 

@@ -20,6 +20,3 @@ This is a Next.js 14 application using the App Router with TypeScript and Tailwi
 - **Styling**: Tailwind CSS with custom gradient utilities (radial, conic)
 - **Font**: Inter (Google Font via next/font)
 
-## BMAD Method
-
-The `.bmad/` directory contains the BMAD (Build More, Architect Dreams) method framework for project planning and architecture workflows.
